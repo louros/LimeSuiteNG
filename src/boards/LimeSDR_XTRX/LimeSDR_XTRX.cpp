@@ -218,7 +218,7 @@ LimeSDR_XTRX::LimeSDR_XTRX(std::shared_ptr<IComms> spiRFsoc,
     }
     {
         mStreamers.reserve(mLMSChips.size());
-        if (mStreamPort.get() != nullptr)
+        if (mStreamPort.get() == nullptr)
         {
             std::shared_ptr<LimePCIe> trxPort{ mStreamPort };
             auto rxdma = std::make_shared<LimePCIeDMA>(trxPort, DataTransferDirection::DeviceToHost);

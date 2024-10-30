@@ -1,4 +1,5 @@
 #include "comms/PCIe/PCIE_CSR_Pipe.h"
+#include "logger/LoggerInternal.h"
 
 using namespace lime;
 

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <filesystem>
 
 namespace lime {
 

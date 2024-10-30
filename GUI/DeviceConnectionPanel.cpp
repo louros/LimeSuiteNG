@@ -12,6 +12,7 @@
 #include "limesuiteng/DeviceRegistry.h"
 
 #include "events.h"
+#include "logger/LoggerInternal.h"
 
 namespace lime {
 

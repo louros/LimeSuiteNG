@@ -9,6 +9,8 @@
 #include <iomanip>
 #include <sstream>
 
+#include "logger/LoggerInternal.h"
+
 using namespace lime;
 using namespace std::literals::string_literals;
 
@@ -252,6 +254,8 @@ void SOCConfig_view::UpdateGain(const wxCommandEvent& event, const ChannelConfig
 
 void SOCConfig_view::SubmitConfig(const wxCommandEvent& event)
 {
+    log(LogLevel::Info, "SubmitConfig: %d", sdrDevice);
+
     if (!sdrDevice)
         return;
 
@@ -314,28 +318,35 @@ void SOCConfig_view::SubmitConfig(const wxCommandEvent& event)
         // ch.txTestSignal;
     }
 
+    log(LogLevel::Info, "Begin.");
     try
     {
         OpStatus status = sdrDevice->Init();
         if (status != OpStatus::Success)
         {
+            log(LogLevel::Info, "SDR initialization failed.");
             wxMessageBox("SDR initialization failed."s, _("Error"));
             return;
         }
+        log(LogLevel::Info, "SDR initialization success.");
 
         status = sdrDevice->Configure(config, socIndex);
         if (status != OpStatus::Success)
         {
+            log(LogLevel::Info, "SDR configuration failed.");
             wxMessageBox("SDR configuration failed."s, _("Error"));
             return;
         }
+        log(LogLevel::Info, "SDR configuration success.");
 
     } catch (std::logic_error& e) // settings problem
     {
+        log(LogLevel::Info, "Configure failed: %s", e.what());
         wxMessageBox("Configure failed: "s + e.what(), _("Warning"));
         return;
     } catch (std::runtime_error& e) // communications problem
     {
+        log(LogLevel::Info, "Configure failed: %s", e.what());
         wxMessageBox("Configure failed: "s + e.what(), _("Warning"));
         return;
     }

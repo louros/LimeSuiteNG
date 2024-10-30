@@ -1,4 +1,4 @@
-#include "comms/PCIe/LimePCIe.h"
+﻿#include "comms/PCIe/LimePCIe.h"
 
 #include "limesuiteng/Logger.h"
 
@@ -17,13 +17,17 @@
     #include "linux-kernel-module/limepcie.h"
 #endif
 
-#ifdef __WIN32__
-    #include <windows.h>
-    #include <setupapi.h>
-    #include <iostream>
-    #include <vector>
-    #include <string>
-#endif
+#include <windows.h>
+#include <setupapi.h>
+#include <iostream>
+#include <vector>
+#include <string>
+
+#include <ioapiset.h>
+#include "liblitepcie.h"
+#include "csr.h"
+#include "logger/LoggerInternal.h"
+#include "litepcie.h"
 
 using namespace std;
 using namespace lime;
@@ -36,53 +40,44 @@ std::vector<std::string> LimePCIe::GetEndpointsWithPattern(const std::string& de
     return devices;
 }
 
+/* DNA Registers */
+#define CSR_DNA_BASE (CSR_BASE + 0x1000L)
+#define CSR_DNA_ID_ADDR (CSR_BASE + 0x1000L)
+#define CSR_DNA_ID_SIZE 2
+
 std::vector<std::string> LimePCIe::GetPCIeDeviceList()
 {
-    // GUID for LitePCIe device class, replace this with the actual LitePCIe GUID if needed.
-    GUID LitePCIeGUID = { 164ADC02-E1AE-4FE1-A904-9A013577B891 };
-    HDEVINFO deviceInfoSet;
-    SP_DEVICE_INTERFACE_DATA deviceInterfaceData;
-    PSP_DEVICE_INTERFACE_DETAIL_DATA deviceInterfaceDetailData;
-    DWORD requiredSize = 0;
-    int deviceIndex = 0;
-    std::vector<std::string> devicePaths; // Vector to hold device paths
+    log(LogLevel::Info, "GetPCIeDeviceList");
 
-    // Get device info set for all installed devices matching the LitePCIe GUID
-    deviceInfoSet = SetupDiGetClassDevs(&LitePCIeGUID, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-    if (deviceInfoSet == INVALID_HANDLE_VALUE) {
-        std::cerr << "Failed to get device info set" << std::endl;
-        return devicePaths; // Return empty vector on failure
+    vector<std::string> handles;
+
+    file_t fd;
+    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+    if (fd == INVALID_HANDLE_VALUE)
+    {
+        log(LogLevel::Info, "Could not init driver\n");
+        return handles;
     }
 
-    // Initialize the device interface data structure
-    deviceInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
+    unsigned char fpga_identifier[256]; // Filled with binary data
 
-    // Enumerate all devices in the device info set
-    while (SetupDiEnumDeviceInterfaces(deviceInfoSet, NULL, &LitePCIeGUID, deviceIndex, &deviceInterfaceData)) {
-        deviceIndex++;
-
-        // Get the required buffer size for the device interface detail
-        SetupDiGetDeviceInterfaceDetail(deviceInfoSet, &deviceInterfaceData, NULL, 0, &requiredSize, NULL);
-        deviceInterfaceDetailData = (PSP_DEVICE_INTERFACE_DETAIL_DATA)malloc(requiredSize);
-        deviceInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
-
-        // Get the device interface detail
-        if (SetupDiGetDeviceInterfaceDetail(deviceInfoSet, &deviceInterfaceData, deviceInterfaceDetailData, requiredSize, NULL, NULL)) {
-            // Store device path in the vector
-            devicePaths.push_back(std::string(deviceInterfaceDetailData->DevicePath, deviceInterfaceDetailData->DevicePath + wcslen(deviceInterfaceDetailData->DevicePath)));
-        } else {
-            std::cerr << "Failed to get device interface detail" << std::endl;
-        }
-
-        free(deviceInterfaceDetailData);
+    for (int i = 0; i < 255; i++)
+    {
+        fpga_identifier[i] = litepcie_readl(fd, CSR_IDENTIFIER_MEM_BASE + 4 * i);
     }
+    log(LogLevel::Info, "FPGA Identifier:  %s\n", fpga_identifier);
 
-    if (GetLastError() != ERROR_NO_MORE_ITEMS) {
-        std::cerr << "Error enumerating devices" << std::endl;
-    }
+    std::string identifier_string(reinterpret_cast<const char*>(fpga_identifier));
+    log(LogLevel::Info, "FPGA Identifier: %s\n", identifier_string.c_str());
 
-    SetupDiDestroyDeviceInfoList(deviceInfoSet);
-    return devicePaths; // Return the vector of device paths
+    log(LogLevel::Info,
+        "FPGA DNA:         0x%08x%08x\n",
+        litepcie_readl(fd, CSR_DNA_ID_ADDR + 4 * 0),
+        litepcie_readl(fd, CSR_DNA_ID_ADDR + 4 * 1));
+
+    handles.push_back("\\CTRL");
+
+    return handles;
 }
 
 LimePCIe::LimePCIe()
@@ -96,14 +91,41 @@ LimePCIe::~LimePCIe()
     Close();
 }
 
+#include <windows.h>
+#include <stdexcept>
+#include <wchar.h>
+
 OpStatus LimePCIe::RunControlCommand(uint8_t* request, uint8_t* response, size_t length, int timeout_ms)
 {
-#ifndef ENOIOCTLCMD
-    constexpr int ENOIOCTLCMD = 515; // not a standard Posix error code, but exists in linux kernel headers
-#endif
-    
-    return OpStatus::Error;
+    file_t fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+
+    if (fd == INVALID_HANDLE_VALUE)
+    {
+        // Handle error (e.g., log, return IOFailure)
+        log(LogLevel::Info, "INVALID_HANDLE_VALUE");
+        return OpStatus::IOFailure;
+    }
+
+    // Define the control packet structure
+    struct litepcie_control_packet pkt;
+    pkt.timeout_ms = timeout_ms;
+    pkt.length = length;
+
+    // Copy the request data into the packet
+    memcpy(pkt.request, request, length);
+
+    int resp = checked_ioctl(fd, LITEPCIE_IOCTL_RUN_CONTROL_COMMAND, pkt);
+
+    // Check the result of the DeviceIoControl call
+    if ((size_t) pkt.length != length)
+        return OpStatus::IOFailure;
+
+    // Copy the response data from the packet
+    memcpy(response, pkt.response, length);
+
+    return OpStatus::Success;
 }
+
 
 OpStatus LimePCIe::RunControlCommand(uint8_t* data, size_t length, int timeout_ms)
 {
@@ -112,7 +134,15 @@ OpStatus LimePCIe::RunControlCommand(uint8_t* data, size_t length, int timeout_m
 
 OpStatus LimePCIe::Open(const std::filesystem::path& deviceFilename, uint32_t flags)
 {
-    return OpStatus::Error;
+    file_t fd;
+    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+    if (fd == INVALID_HANDLE_VALUE)
+    {
+        log(LogLevel::Info, "Could not init driver\n");
+        return OpStatus::Error;
+    }
+
+    return OpStatus::Success;
 }
 
 bool LimePCIe::IsOpen() const
@@ -127,10 +157,95 @@ void LimePCIe::Close()
 
 int LimePCIe::WriteControl(const uint8_t* buffer, const int length, int timeout_ms)
 {
-    return 0;
+    file_t fd;
+    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+    if (fd == INVALID_HANDLE_VALUE)
+    {
+        log(LogLevel::Info, "Could not init driver\n");
+        return 0;
+    }
+
+    DWORD bytesWritten;
+    BOOL result = WriteFile(fd,
+        buffer,
+        length,
+        &bytesWritten,
+        NULL
+    );
+
+    if (!result)
+    {
+        return -1;
+    }
+
+    return bytesWritten;
 }
 
 int LimePCIe::ReadControl(uint8_t* buffer, const int length, int timeout_ms)
 {
-   return 0;
+    file_t fd;
+    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+    if (fd == INVALID_HANDLE_VALUE)
+    {
+        log(LogLevel::Info, "Could not init driver\n");
+        return 0;
+    }
+
+    // Initialize the buffer with zeroes
+    memset(buffer, 0, length);
+    uint32_t status = 0;
+    DWORD bytesRead;
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    do
+    {
+        // Attempt to read status
+        BOOL result = ReadFile(fd, // File handle
+            &status, // Buffer to read status into
+            sizeof(status), // Size of status buffer
+            &bytesRead, // Number of bytes read
+            NULL // No overlapped I/O
+        );
+
+        if (!result)
+        {
+            DWORD error = GetLastError();
+            if (error != ERROR_IO_PENDING && error != ERROR_MORE_DATA)
+            {
+                break; // Error, not a retryable case
+            }
+        }
+
+        // Check if the status byte has changed
+        if ((status & 0xFF00) != 0)
+        {
+            break;
+        }
+
+        // Sleep for 10 microseconds
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
+
+    } while (
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - t1).count() < timeout_ms);
+
+    // Check for timeout condition
+    if ((status & 0xFF00) == 0)
+    {
+        ReportError(OpStatus::Timeout, "CMD %02X Read timeout", status & 0xFF);
+    }
+
+    // Attempt to read the actual buffer data
+    BOOL finalRead = ReadFile(fd, // File handle
+        buffer, // Buffer to read into
+        length, // Length of data to read
+        &bytesRead, // Number of bytes read
+        NULL // No overlapped I/O
+    );
+
+    if (!finalRead)
+    {
+        return -1; // Error occurred during read
+    }
+
+    return bytesRead; // Return the number of bytes read
 }

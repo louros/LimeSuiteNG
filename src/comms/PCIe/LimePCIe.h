@@ -69,6 +69,7 @@ class LIME_API LimePCIe
     /// @param filePath The new file to use for communications with a device.
     void SetPathName(const std::filesystem::path& filePath) { mFilePath = filePath; };
 
+
   private:
     std::filesystem::path mFilePath;
     int mFileDescriptor;

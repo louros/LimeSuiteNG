@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <iostream>
+#include <windows.h>
 
 using namespace lime;
 using namespace std::literals::string_literals;

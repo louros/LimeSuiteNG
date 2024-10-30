@@ -21,7 +21,7 @@ void __loadBoardSupport()
     __loadFTDI();
 #endif
 
-#ifdef ENABLE_LIMEPCIE
+//#ifdef ENABLE_LIMEPCIE
     __loadDeviceFactoryPCIe();
-#endif
+//#endif
 }
