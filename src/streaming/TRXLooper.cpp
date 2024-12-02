@@ -101,6 +101,7 @@ OpStatus TRXLooper::SetHardwareTimestamp(const uint64_t now)
 /// @return The status of the operation.
 OpStatus TRXLooper::Setup(const StreamConfig& cfg)
 {
+    log(LogLevel::Info, "TRXLooper Setup() %d", mStreamEnabled);
     if (mStreamEnabled)
         return ReportError(OpStatus::Busy, "Samples streaming already running"s);
 
@@ -127,6 +128,7 @@ OpStatus TRXLooper::Setup(const StreamConfig& cfg)
     mRx.packetsToBatch = 6;
 
     OpStatus status = fpga->SelectModule(chipId);
+    log(LogLevel::Info, "fpga status %d", status);
     if (status != OpStatus::Success)
         return status;
     fpga->StopStreaming();
@@ -135,7 +137,8 @@ OpStatus TRXLooper::Setup(const StreamConfig& cfg)
     fpga->ResetTimestamp();
 
     mConfig = cfg;
-    bool needTx = cfg.channels.at(TRXDir::Tx).size() > 0;
+    bool needTx = 0;
+     //cfg.channels.at(TRXDir::Tx).size() > 0;
     bool needRx = cfg.channels.at(TRXDir::Rx).size() > 0 || needTx; // always need Rx to know current timestamps, cfg.rxCount > 0;
 
     uint16_t channelEnables = 0;
@@ -148,12 +151,14 @@ OpStatus TRXLooper::Setup(const StreamConfig& cfg)
 
     mConfig = cfg;
 
+    log(LogLevel::Info, "!needTx && !needRx %d", (!needTx && !needRx));
     if (!needTx && !needRx)
         return OpStatus::Success;
 
     const bool use_trxiqpulse = lms->Get_SPI_Reg_bits(LMS7002MCSR::LML1_TRXIQPULSE);
     const bool sisoddr_on = lms->Get_SPI_Reg_bits(LMS7002MCSR::LML1_SISODDR);
     status = fpga->ConfigureSamplesStream(channelEnables, cfg.linkFormat, sisoddr_on, use_trxiqpulse);
+    log(LogLevel::Info, "ConfigureSamplesStream status %d", status);
     if (status != OpStatus::Success)
         return status;
 
@@ -175,6 +180,8 @@ OpStatus TRXLooper::Setup(const StreamConfig& cfg)
     if (needRx)
         status = RxSetup();
 
+    log(LogLevel::Info, "rx setup success %d", status);
+
     if (status != OpStatus::Success)
         return status;
 
@@ -191,6 +198,8 @@ OpStatus TRXLooper::Setup(const StreamConfig& cfg)
 /// @brief Starts the stream of this looper.
 OpStatus TRXLooper::Start()
 {
+    log(LogLevel::Info, "Start()");
+
     OpStatus status = fpga->SelectModule(chipId);
     if (status != OpStatus::Success)
         return status;
@@ -226,12 +235,12 @@ void TRXLooper::Stop()
                 mRx.cv.wait(lck);
         }
 
-        if (mCallback_logMessage)
-        {
+        //if (mCallback_logMessage)
+        //{
             char msg[256];
             std::snprintf(msg, sizeof(msg), "Rx%i stop: packetsIn: %li", chipId, mRx.stats.packets);
-            mCallback_logMessage(LogLevel::Verbose, msg);
-        }
+            log(LogLevel::Verbose, msg);
+        //}
     }
 
     // wait for loop ends
@@ -307,6 +316,7 @@ void TRXLooper::Teardown()
 OpStatus TRXLooper::RxSetup()
 {
     OpStatus status = mRxArgs.dma->Initialize();
+    log(LogLevel::Info, "RxSetup() %d", status);
     if (status != OpStatus::Success)
         return status;
 
@@ -365,6 +375,7 @@ OpStatus TRXLooper::RxSetup()
         bufferTimeDuration = mRx.samplesInPkt * mRx.packetsToBatch / mConfig.hintSampleRate;
     else
         bufferTimeDuration = 0;
+
     char msg[256];
     std::snprintf(msg,
         sizeof(msg),
@@ -380,32 +391,52 @@ OpStatus TRXLooper::RxSetup()
         mConfig.hintSampleRate);
     if (showStats)
         printf("%s", msg);
-    if (mCallback_logMessage)
-        mCallback_logMessage(LogLevel::Verbose, msg);
+    //if (mCallback_logMessage)
+        log(LogLevel::Info, msg);
 
+        //[13:19:25] INFO: RxSetup() 0
+        //[13:19:25] INFO: \DMA0 Rx0 Setup: usePoll:1 rxSamplesInPkt:256 rxPacketsInBatch:10, DMA_ReadSize:7840, link:I12, batchSizeInTime:65.098us FS:39325316.000000
+
+        
+    log(LogLevel::Info, "1");
     std::vector<uint8_t*> dmaBuffers(dmaChunks.size());
     for (uint32_t i = 0; i < dmaChunks.size(); ++i)
     {
         dmaBuffers[i] = dmaChunks[i].buffer;
     }
+    log(LogLevel::Info, "2");
 
     mRxArgs.buffers = std::move(dmaBuffers);
     mRxArgs.bufferSize = dmaBufferSize;
     mRxArgs.packetSize = packetSize;
     mRxArgs.packetsToBatch = mRx.packetsToBatch;
     mRxArgs.samplesInPacket = mRx.samplesInPkt;
+    log(LogLevel::Info, "3");
 
     const std::string name = "MemPool_Rx"s + std::to_string(chipId);
     const int upperAllocationLimit =
         sizeof(complex32f_t) * mRx.packetsToBatch * mRx.samplesInPkt * chCount + SamplesPacketType::headerSize;
     mRx.memPool = std::make_unique<MemoryPool>(1024, upperAllocationLimit, 8, name);
 
+    log(LogLevel::Info, "4");
     // Rx start
     const int32_t readSize = mRxArgs.packetSize * mRxArgs.packetsToBatch;
     constexpr uint8_t irqPeriod{ 4 };
     // Rx DMA has to be enabled before the stream enable, otherwise some data
     // might be lost in the time frame between stream enable and then dma enable.
+    log(LogLevel::Info, "5");
+
+    log(LogLevel::Info, "mRxArgs bufferSize %d", mRxArgs.bufferSize);
+
+    if (mRxArgs.dma == NULL)
+        log(LogLevel::Info, "dma is null");
+    else
+        log(LogLevel::Info, "dma is NOT null");
+
     status = mRxArgs.dma->EnableContinuous(true, readSize, irqPeriod);
+
+    log(LogLevel::Info, "EnableContinuous: %d", status);
+
     if (status != OpStatus::Success)
         return status;
 
@@ -464,6 +495,7 @@ void TRXLooper::RxWorkLoop()
             while (!mStreamEnabled && !mRx.terminateWorker.load(std::memory_order_relaxed))
                 streamActive.wait_for(lk, std::chrono::milliseconds(100));
         }
+        lime::debug("mStreamEnabled: %d", mStreamEnabled);
         if (!mStreamEnabled)
             continue;
 
@@ -560,12 +592,12 @@ void TRXLooper::ReceivePacketsLoop()
                 fifo->size());
             if (showStats)
                 printf("%s\n", msg);
-            if (mCallback_logMessage)
-            {
+            //if (mCallback_logMessage)
+            //{
                 bool showAsWarning = overrun.delta() || loss.delta();
                 LogLevel level = showAsWarning ? LogLevel::Warning : LogLevel::Debug;
-                mCallback_logMessage(level, msg);
-            }
+                log(level, msg);
+            //}
             overrun.checkpoint();
             loss.checkpoint();
             Bps = 0;
@@ -705,6 +737,8 @@ void TRXLooper::RxTeardown()
 template<class T>
 uint32_t TRXLooper::StreamRxTemplate(T* const* dest, uint32_t count, StreamMeta* meta, chrono::microseconds timeout)
 {
+    log(LogLevel::Info, "StreamRxTemplate %d", count);
+
     bool timestampSet = false;
     uint32_t samplesProduced = 0;
     const bool useChannelB = mConfig.channels.at(TRXDir::Rx).size() > 1;
@@ -719,11 +753,16 @@ uint32_t TRXLooper::StreamRxTemplate(T* const* dest, uint32_t count, StreamMeta*
     auto start = chrono::high_resolution_clock::now();
     while (samplesProduced < count)
     {
-        if (!mRx.stagingPacket && !mRx.fifo->pop(&mRx.stagingPacket, firstIteration, timeout))
+        log(LogLevel::Info, "mRx.stagingPacket %d", mRx.stagingPacket);
+        bool pop = mRx.fifo->pop(&mRx.stagingPacket, firstIteration, timeout);
+        log(LogLevel::Info, "pop %d", pop);
+
+        if (!mRx.stagingPacket && !pop)
         {
             lime::error("No samples or timeout"s);
             return samplesProduced;
         }
+        log(LogLevel::Info, "   ");
 
         if (!timestampSet && meta)
         {
@@ -786,6 +825,7 @@ uint32_t TRXLooper::StreamRx(lime::complex12_t* const* samples, uint32_t count, 
 OpStatus TRXLooper::TxSetup()
 {
     OpStatus status = mTxArgs.dma->Initialize();
+    log(LogLevel::Info, "TxSetup() %d", status);
     if (status != OpStatus::Success)
         return status;
 
@@ -856,8 +896,8 @@ OpStatus TRXLooper::TxSetup()
             bufferTimeDuration * 1e6);
         if (showStats)
             printf("%s\n", msg);
-        if (mCallback_logMessage)
-            mCallback_logMessage(LogLevel::Verbose, msg);
+        //if (mCallback_logMessage)
+            log(LogLevel::Verbose, msg);
     }
 
     const std::string name = "MemPool_Tx"s + std::to_string(chipId);
@@ -1025,12 +1065,12 @@ void TRXLooper::TransmitPacketsLoop()
                     fifo->size());
                 if (showStats)
                     lime::info("%s", msg);
-                if (mCallback_logMessage)
-                {
+                //if (mCallback_logMessage)
+                //{
                     bool showAsWarning = underrun.delta() || loss.delta();
                     LogLevel level = showAsWarning ? LogLevel::Warning : LogLevel::Debug;
-                    mCallback_logMessage(level, msg);
-                }
+                    log(level, msg);
+                //}
             }
             loss.checkpoint();
             underrun.checkpoint();

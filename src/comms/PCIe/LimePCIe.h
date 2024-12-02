@@ -9,6 +9,18 @@
 #include <vector>
 #include <string>
 
+#include <windows.h>
+#include <setupapi.h>
+#include <iostream>
+#include <vector>
+#include <string>
+
+#include <ioapiset.h>
+#include "liblitepcie.h"
+#include "csr.h"
+#include "logger/LoggerInternal.h"
+#include "litepcie.h"
+
 namespace lime {
 
 class LimePCIeDMA;
@@ -73,6 +85,7 @@ class LIME_API LimePCIe
   private:
     std::filesystem::path mFilePath;
     int mFileDescriptor;
+    file_t wfileDescriptor;
 };
 
 } // namespace lime

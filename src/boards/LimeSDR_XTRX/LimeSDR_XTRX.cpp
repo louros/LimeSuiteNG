@@ -133,6 +133,8 @@ LimeSDR_XTRX::LimeSDR_XTRX(std::shared_ptr<IComms> spiRFsoc,
     , mSerialPort(control)
     , mConfigInProgress(false)
 {
+    log(LogLevel::Info, "LimeSDR_XTRX");
+
     /// Do not perform any unnecessary configuring to device in constructor, so you
     /// could read back it's state for debugging purposes.
     SDRDescriptor& desc = mDeviceDescriptor;
@@ -218,7 +220,7 @@ LimeSDR_XTRX::LimeSDR_XTRX(std::shared_ptr<IComms> spiRFsoc,
     }
     {
         mStreamers.reserve(mLMSChips.size());
-        if (mStreamPort.get() == nullptr)
+        if (mStreamPort.get() != nullptr)
         {
             std::shared_ptr<LimePCIe> trxPort{ mStreamPort };
             auto rxdma = std::make_shared<LimePCIeDMA>(trxPort, DataTransferDirection::DeviceToHost);
@@ -265,7 +267,7 @@ OpStatus LimeSDR_XTRX::Configure(const SDRConfig& cfg, uint8_t socIndex)
 {
     std::vector<std::string> errors;
     bool isValidConfig = LMS7002M_Validate(cfg, errors);
-
+    //return OpStatus::Success;
     if (!isValidConfig)
     {
         std::stringstream ss;

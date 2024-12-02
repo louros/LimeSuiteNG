@@ -12,6 +12,8 @@
 #include <thread>
 #include <vector>
 
+#include "logger/LoggerInternal.h"
+
 using namespace std;
 using namespace std::literals::string_literals;
 
@@ -178,13 +180,17 @@ OpStatus FPGA::ReadRegisters(const uint32_t* addrs, uint32_t* data, unsigned cnt
 /// @return The operation status.
 OpStatus FPGA::StartStreaming()
 {
+    log(LogLevel::Info, "StartStreaming()");
+
     lime::debug("FPGA: %s", __func__);
     int interface_ctrl_000A = ReadRegister(0x000A);
+    log(LogLevel::Info, "interface_ctrl_000A %d", interface_ctrl_000A);
     if (interface_ctrl_000A < 0)
         return OpStatus::IOFailure;
 
     if ((interface_ctrl_000A & RX_EN) != 0)
     {
+        log(LogLevel::Info, "FPGA stream is already started");
         lime::warning("FPGA stream is already started"s);
     }
 
@@ -371,6 +377,7 @@ OpStatus FPGA::SetPllFrequency(const uint8_t pllIndex, const double inputFreq, s
     batch.WriteRegister(0x0023, reg23val); //PLL_IND
     batch.Flush();
 
+    log(LogLevel::Debug, "willDoPhaseSearch %d", willDoPhaseSearch);
     if (!willDoPhaseSearch)
     {
         WriteRegister(0x0023, reg23val | PLLRST_START);

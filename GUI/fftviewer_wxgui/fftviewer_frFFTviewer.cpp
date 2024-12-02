@@ -424,7 +424,10 @@ void fftviewer_frFFTviewer::StreamingLoop(
     config.linkFormat = fmt;
     const uint8_t chipIndex = pthis->lmsIndex;
 
-    try
+    pthis->device->StreamSetup(config, chipIndex);
+    pthis->device->StreamStart(chipIndex);
+
+    /* try
     {
         pthis->device->StreamSetup(config, chipIndex);
         pthis->device->StreamStart(chipIndex);
@@ -434,7 +437,7 @@ void fftviewer_frFFTviewer::StreamingLoop(
     } catch (std::runtime_error& e)
     {
         lime::error("%s", e.what());
-    }
+    }*/
 
     // uint16_t regVal = 0;
     // TODO:
@@ -477,6 +480,7 @@ void fftviewer_frFFTviewer::StreamingLoop(
         buffers[i] = new complex32f_t[fftSize];
     }
 
+    log(LogLevel::Info, "this is where it stops right?");
     while (pthis->stopProcessing.load() == false)
     {
         uint32_t samplesPopped;

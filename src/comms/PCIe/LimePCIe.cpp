@@ -17,17 +17,6 @@
     #include "linux-kernel-module/limepcie.h"
 #endif
 
-#include <windows.h>
-#include <setupapi.h>
-#include <iostream>
-#include <vector>
-#include <string>
-
-#include <ioapiset.h>
-#include "liblitepcie.h"
-#include "csr.h"
-#include "logger/LoggerInternal.h"
-#include "litepcie.h"
 
 using namespace std;
 using namespace lime;
@@ -83,6 +72,7 @@ std::vector<std::string> LimePCIe::GetPCIeDeviceList()
 LimePCIe::LimePCIe()
     : mFilePath()
     , mFileDescriptor(-1)
+    , wfileDescriptor(NULL)
 {
 }
 
@@ -134,12 +124,12 @@ OpStatus LimePCIe::RunControlCommand(uint8_t* data, size_t length, int timeout_m
 
 OpStatus LimePCIe::Open(const std::filesystem::path& deviceFilename, uint32_t flags)
 {
-    file_t fd;
-    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
-    if (fd == INVALID_HANDLE_VALUE)
+    mFilePath = deviceFilename;
+    wfileDescriptor = litepcie_open(deviceFilename.string().c_str(), FILE_ATTRIBUTE_NORMAL);
+    if (wfileDescriptor == INVALID_HANDLE_VALUE)
     {
-        log(LogLevel::Info, "Could not init driver\n");
-        return OpStatus::Error;
+        log(LogLevel::Info, "Failed to open device %s", mFilePath.c_str());
+        return OpStatus::FileNotFound;
     }
 
     return OpStatus::Success;
@@ -158,7 +148,7 @@ void LimePCIe::Close()
 int LimePCIe::WriteControl(const uint8_t* buffer, const int length, int timeout_ms)
 {
     file_t fd;
-    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+    fd = litepcie_open("\\DMA0", FILE_ATTRIBUTE_NORMAL);
     if (fd == INVALID_HANDLE_VALUE)
     {
         log(LogLevel::Info, "Could not init driver\n");
@@ -184,7 +174,7 @@ int LimePCIe::WriteControl(const uint8_t* buffer, const int length, int timeout_
 int LimePCIe::ReadControl(uint8_t* buffer, const int length, int timeout_ms)
 {
     file_t fd;
-    fd = litepcie_open("\\CTRL", FILE_ATTRIBUTE_NORMAL);
+    fd = litepcie_open("\\DMA0", FILE_ATTRIBUTE_NORMAL);
     if (fd == INVALID_HANDLE_VALUE)
     {
         log(LogLevel::Info, "Could not init driver\n");

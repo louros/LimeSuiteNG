@@ -96,18 +96,56 @@ struct litepcie_ioctl_mmap_dma_update {
 	int64_t sw_count;
 };
 
+struct litepcie_ioctl_dma_control {
+    bool directionFromDevice;
+    bool enabled;
+};
+
+struct litepcie_ioctl_dma_control_continuous {
+    uint32_t transferSize;
+    uint8_t irqPeriod;
+    struct litepcie_ioctl_dma_control control;
+};
+
+struct litepcie_ioctl_dma_status {
+    uint64_t fromDeviceCounter;
+    uint64_t toDeviceCounter;
+    bool wait_for_read;
+    bool wait_for_write;
+};
+
+struct litepcie_ioctl_dma_request {
+    uint32_t bufferIndex;
+    uint32_t transferSize;
+    bool generateIRQ;
+    bool directionFromDevice;
+};
+
+struct litepcie_cache_flush {
+    uint32_t bufferIndex;
+    bool directionFromDevice;
+    bool sync_to_cpu;
+};
+
 #define LITEPCIE_IOCTL(id)		CTL_CODE(FILE_DEVICE_UNKNOWN, id, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 #define LITEPCIE_IOCTL_REG               LITEPCIE_IOCTL(0) // struct litepcie_ioctl_reg
 #define LITEPCIE_IOCTL_FLASH             LITEPCIE_IOCTL(1) // struct litepcie_ioctl_flash
 #define LITEPCIE_IOCTL_ICAP              LITEPCIE_IOCTL(2) // struct litepcie_ioctl_icap
 
-#define LITEPCIE_IOCTL_DMA                       LITEPCIE_IOCTL(20) // struct litepcie_ioctl_dma
-#define LITEPCIE_IOCTL_DMA_WRITER                LITEPCIE_IOCTL(21) // struct litepcie_ioctl_dma_writer
-#define LITEPCIE_IOCTL_DMA_READER                LITEPCIE_IOCTL(22) // struct litepcie_ioctl_dma_reader
+
+#define LITEPCIE_IOCTL_DMA_CONTROL				LITEPCIE_IOCTL(21) // limepcie_ioctl_dma_control
+#define LITEPCIE_IOCTL_DMA_CONTROL_CONTINUOUS	LITEPCIE_IOCTL(22) // struct limepcie_ioctl_dma_control_continuous
+#define LITEPCIE_IOCTL_DMA_STATUS				LITEPCIE_IOCTL(23) // struct limepcie_ioctl_dma_status
+#define LITEPCIE_IOCTL_DMA_REQUEST				LITEPCIE_IOCTL(26) // struct limepcie_ioctl_dma_request
+#define LITEPCIE_IOCTL_CACHE_FLUSH				LITEPCIE_IOCTL(28) // struct limepcie_cache_flush
+
+//#define LITEPCIE_IOCTL_DMA                       LITEPCIE_IOCTL(20) // struct litepcie_ioctl_dma
+//#define LITEPCIE_IOCTL_DMA_WRITER                LITEPCIE_IOCTL(21) // struct litepcie_ioctl_dma_writer
+//#define LITEPCIE_IOCTL_DMA_READER                LITEPCIE_IOCTL(22) // struct litepcie_ioctl_dma_reader
 #define LITEPCIE_IOCTL_MMAP_DMA_INFO             LITEPCIE_IOCTL(24) // struct litepcie_ioctl_mmap_dma_info
 #define LITEPCIE_IOCTL_LOCK                      LITEPCIE_IOCTL(25) // struct litepcie_ioctl_lock
-#define LITEPCIE_IOCTL_MMAP_DMA_WRITER_UPDATE    LITEPCIE_IOCTL(26) // struct litepcie_ioctl_mmap_dma_update
+//#define LITEPCIE_IOCTL_MMAP_DMA_WRITER_UPDATE    LITEPCIE_IOCTL(26) // struct litepcie_ioctl_mmap_dma_update
 #define LITEPCIE_IOCTL_MMAP_DMA_READER_UPDATE    LITEPCIE_IOCTL(27) // struct litepcie_ioctl_mmap_dma_update
 
 #define LITEPCIE_IOCTL_RUN_CONTROL_COMMAND		 LITEPCIE_IOCTL(30) 

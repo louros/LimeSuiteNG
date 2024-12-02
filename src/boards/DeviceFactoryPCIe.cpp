@@ -187,6 +187,10 @@ SDRDevice* DeviceFactoryPCIe::make(const DeviceHandle& handle)
     }
     */
 
+    std::vector<std::shared_ptr<LimePCIe>> streamPorts;
+    streamPorts.push_back(std::make_shared<LimePCIe>());
+    streamPorts.back()->SetPathName("\\DMA0");
+
     std::shared_ptr<LimePCIe> controlPort = std::make_shared<LimePCIe>();
 
     // protocol layer
@@ -199,11 +203,12 @@ SDRDevice* DeviceFactoryPCIe::make(const DeviceHandle& handle)
     LMS64CProtocol::GetFirmwareInfo(*controlPipe, fw, subDeviceIndex);
 
     log(LogLevel::Info, "fw.deviceId %d", fw.deviceId);
+    log(LogLevel::Info, "streamPorts.size() %d", streamPorts.size());
 
     switch (fw.deviceId)
     {
     case LMS_DEV_LIMESDR_XTRX:
-        return new LimeSDR_XTRX(route_lms7002m, route_fpga, nullptr, controlPipe);
+        return new LimeSDR_XTRX(route_lms7002m, route_fpga, streamPorts.empty() ? nullptr : streamPorts.front(), controlPipe);
     default:
         lime::ReportError(OpStatus::InvalidValue, "Unrecognized device ID (%i)", fw.deviceId);
         return nullptr;

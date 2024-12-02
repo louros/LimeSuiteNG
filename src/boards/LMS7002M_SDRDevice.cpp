@@ -835,6 +835,7 @@ OpStatus LMS7002M_SDRDevice::StreamSetup(const StreamConfig& config, uint8_t mod
 
 void LMS7002M_SDRDevice::StreamStart(uint8_t moduleIndex)
 {
+    log(LogLevel::Info, "LMS7002M_SDRDevice::StreamStart");
     if (moduleIndex >= mStreamers.size())
         return;
     mStreamers.at(moduleIndex)->Start();
