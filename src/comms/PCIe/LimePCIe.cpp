@@ -173,6 +173,7 @@ int LimePCIe::WriteControl(const uint8_t* buffer, const int length, int timeout_
 
 int LimePCIe::ReadControl(uint8_t* buffer, const int length, int timeout_ms)
 {
+    log(LogLevel::Info, "ReadControl\n");
     file_t fd;
     fd = litepcie_open("\\DMA0", FILE_ATTRIBUTE_NORMAL);
     if (fd == INVALID_HANDLE_VALUE)

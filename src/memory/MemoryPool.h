@@ -20,6 +20,7 @@ class MemoryPool
 
     void* Allocate(int size);
     void Free(void* ptr);
+    int GetFree();
 
     /// @brief Gets the maximum possible allocation size of this memory pool.
     /// @return The maximum amount of memory (in bytes) this pool can allocate.

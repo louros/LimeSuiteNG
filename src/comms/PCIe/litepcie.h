@@ -83,6 +83,10 @@ struct litepcie_ioctl_mmap_dma_info {
 	uint64_t dma_rx_buf_offset;
 	uint64_t dma_rx_buf_size;
 	uint64_t dma_rx_buf_count;
+
+	PVOID base_rx_address;
+
+	HANDLE processHandle;
 };
 
 struct litepcie_control_packet {

@@ -113,4 +113,9 @@ void MemoryPool::Free(void* ptr)
     mFreeBlocks.push(ptr);
 }
 
+int MemoryPool::GetFree()
+{
+    return mFreeBlocks.size();
+}
+
 } // namespace lime

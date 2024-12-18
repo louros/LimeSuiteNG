@@ -480,7 +480,7 @@ void fftviewer_frFFTviewer::StreamingLoop(
         buffers[i] = new complex32f_t[fftSize];
     }
 
-    log(LogLevel::Info, "this is where it stops right?");
+    //log(LogLevel::Info, "this is where it stops right?");
     while (pthis->stopProcessing.load() == false)
     {
         uint32_t samplesPopped;

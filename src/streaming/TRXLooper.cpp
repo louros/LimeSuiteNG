@@ -176,6 +176,7 @@ OpStatus TRXLooper::Setup(const StreamConfig& cfg)
         fpga->WriteRegister(0x000A, interface_ctrl_000A);
     }
 
+    //log(LogLevel::Info, "before rx teardown call");
     RxTeardown();
     if (needRx)
         status = RxSetup();
@@ -315,6 +316,7 @@ void TRXLooper::Teardown()
 
 OpStatus TRXLooper::RxSetup()
 {
+    //log(LogLevel::Info, "RxSetup() start");
     OpStatus status = mRxArgs.dma->Initialize();
     log(LogLevel::Info, "RxSetup() %d", status);
     if (status != OpStatus::Success)
@@ -336,6 +338,9 @@ OpStatus TRXLooper::RxSetup()
     {
         const int requestSamplesInPkt = 256 / chCount;
         const int payloadSize = requestSamplesInPkt * sampleSize * chCount;
+        //log(LogLevel::Info, "payloadSize: %d", payloadSize);
+        //log(LogLevel::Info, "requestSamplesInPkt: %d", requestSamplesInPkt);
+        //log(LogLevel::Info, "sampleSize: %d", sampleSize);
         packetSize = payloadSize + headerSize;
         packetSize = fpga->SetUpVariableRxSize(packetSize, payloadSize, sampleSize, chipId);
         mRx.samplesInPkt = (packetSize - headerSize) / (sampleSize * chCount);
@@ -344,6 +349,11 @@ OpStatus TRXLooper::RxSetup()
     {
         mRx.samplesInPkt = (packetSize - headerSize) / (sampleSize * chCount);
     }
+    
+    //log(LogLevel::Info, "chCount: %d", chCount);
+   // log(LogLevel::Info, "sampleSize: %d", sampleSize);
+    //log(LogLevel::Info, "headerSize: %d", headerSize);
+    //log(LogLevel::Info, "packetSize: %d", packetSize);
 
     if (mConfig.extraConfig.rx.packetsInBatch != 0)
         mRx.packetsToBatch = mConfig.extraConfig.rx.packetsInBatch;
@@ -398,44 +408,49 @@ OpStatus TRXLooper::RxSetup()
         //[13:19:25] INFO: \DMA0 Rx0 Setup: usePoll:1 rxSamplesInPkt:256 rxPacketsInBatch:10, DMA_ReadSize:7840, link:I12, batchSizeInTime:65.098us FS:39325316.000000
 
         
-    log(LogLevel::Info, "1");
+    //log(LogLevel::Info, "1");
     std::vector<uint8_t*> dmaBuffers(dmaChunks.size());
     for (uint32_t i = 0; i < dmaChunks.size(); ++i)
     {
         dmaBuffers[i] = dmaChunks[i].buffer;
     }
-    log(LogLevel::Info, "2");
+    //log(LogLevel::Info, "2");
 
     mRxArgs.buffers = std::move(dmaBuffers);
     mRxArgs.bufferSize = dmaBufferSize;
     mRxArgs.packetSize = packetSize;
     mRxArgs.packetsToBatch = mRx.packetsToBatch;
     mRxArgs.samplesInPacket = mRx.samplesInPkt;
-    log(LogLevel::Info, "3");
+    //log(LogLevel::Info, "3");
 
     const std::string name = "MemPool_Rx"s + std::to_string(chipId);
     const int upperAllocationLimit =
         sizeof(complex32f_t) * mRx.packetsToBatch * mRx.samplesInPkt * chCount + SamplesPacketType::headerSize;
-    mRx.memPool = std::make_unique<MemoryPool>(1024, upperAllocationLimit, 8, name);
+    mRx.memPool = std::make_unique<MemoryPool>(1024 * 100, upperAllocationLimit, 8, name);
 
-    log(LogLevel::Info, "4");
+    //log(LogLevel::Info, "4");
     // Rx start
     const int32_t readSize = mRxArgs.packetSize * mRxArgs.packetsToBatch;
     constexpr uint8_t irqPeriod{ 4 };
     // Rx DMA has to be enabled before the stream enable, otherwise some data
     // might be lost in the time frame between stream enable and then dma enable.
-    log(LogLevel::Info, "5");
+   //log(LogLevel::Info, "5");
 
-    log(LogLevel::Info, "mRxArgs bufferSize %d", mRxArgs.bufferSize);
+   // log(LogLevel::Info, "mRxArgs bufferSize %d", mRxArgs.bufferSize);
 
-    if (mRxArgs.dma == NULL)
-        log(LogLevel::Info, "dma is null");
-    else
-        log(LogLevel::Info, "dma is NOT null");
+    //if (mRxArgs.dma == NULL)
+   //     log(LogLevel::Info, "dma is null");
+    //else
+    //    log(LogLevel::Info, "dma is NOT null");
+
+    
+    //log(LogLevel::Info, "mRxArgs.packetSize: %d", mRxArgs.packetSize);
+    //log(LogLevel::Info, "mRxArgs.packetsToBatch: %d", mRxArgs.packetsToBatch);
+    //log(LogLevel::Info, "readSize: %d", readSize);
 
     status = mRxArgs.dma->EnableContinuous(true, readSize, irqPeriod);
 
-    log(LogLevel::Info, "EnableContinuous: %d", status);
+    //log(LogLevel::Info, "EnableContinuous: %d", status);
 
     if (status != OpStatus::Success)
         return status;
@@ -513,7 +528,7 @@ void TRXLooper::RxWorkLoop()
 /** @brief Function dedicated for receiving data samples from board */
 void TRXLooper::ReceivePacketsLoop()
 {
-    lime::debug("Rx receive loop start.");
+    //lime::debug("Rx receive loop start.");
     constexpr int headerSize{ sizeof(StreamHeader) };
 
     DataConversion conversion{};
@@ -592,12 +607,12 @@ void TRXLooper::ReceivePacketsLoop()
                 fifo->size());
             if (showStats)
                 printf("%s\n", msg);
-            //if (mCallback_logMessage)
-            //{
+            if (mCallback_logMessage)
+            {
                 bool showAsWarning = overrun.delta() || loss.delta();
                 LogLevel level = showAsWarning ? LogLevel::Warning : LogLevel::Debug;
                 log(level, msg);
-            //}
+            }
             overrun.checkpoint();
             loss.checkpoint();
             Bps = 0;
@@ -611,14 +626,17 @@ void TRXLooper::ReceivePacketsLoop()
                 std::this_thread::yield();
             continue;
         }
-
+        //log(LogLevel::Info, " counters.completed %d", counters.completed);
+        //log(LogLevel::Info, " counters.requests %d", counters.requests);
+        //log(LogLevel::Info, " mRx.memPool-> %d", mRx.memPool->GetFree());
         if (outputPkt == nullptr)
         {
             outputPkt = SamplesPacketType::ConstructSamplesPacket(
                 mRx.memPool->Allocate(outputPktSize), samplesInPkt * mRxArgs.packetsToBatch, outputSampleSize);
             if (outputPkt == nullptr)
             {
-                lime::warning("Rx%i: packets fifo full.", chipId);
+                lime::info("Rx%i: packets fifo full.", chipId);
+                abort();
                 continue;
             }
         }
@@ -702,6 +720,7 @@ void TRXLooper::ReceivePacketsLoop()
 
 void TRXLooper::RxTeardown()
 {
+    log(LogLevel::Info, "RxTeardown()");
     if (mRx.stage.load(std::memory_order_relaxed) != Stream::ReadyStage::Disabled)
     {
         lime::debug("RxTeardown wait for Rx worker shutdown.");
@@ -737,7 +756,7 @@ void TRXLooper::RxTeardown()
 template<class T>
 uint32_t TRXLooper::StreamRxTemplate(T* const* dest, uint32_t count, StreamMeta* meta, chrono::microseconds timeout)
 {
-    log(LogLevel::Info, "StreamRxTemplate %d", count);
+    //log(LogLevel::Info, "StreamRxTemplate %d", count);
 
     bool timestampSet = false;
     uint32_t samplesProduced = 0;
@@ -753,16 +772,16 @@ uint32_t TRXLooper::StreamRxTemplate(T* const* dest, uint32_t count, StreamMeta*
     auto start = chrono::high_resolution_clock::now();
     while (samplesProduced < count)
     {
-        log(LogLevel::Info, "mRx.stagingPacket %d", mRx.stagingPacket);
+        //log(LogLevel::Info, "mRx.stagingPacket %d", mRx.stagingPacket);
         bool pop = mRx.fifo->pop(&mRx.stagingPacket, firstIteration, timeout);
-        log(LogLevel::Info, "pop %d", pop);
+        //log(LogLevel::Info, "pop %d", pop);
 
         if (!mRx.stagingPacket && !pop)
         {
             lime::error("No samples or timeout"s);
             return samplesProduced;
         }
-        log(LogLevel::Info, "   ");
+        //log(LogLevel::Info, "   ");
 
         if (!timestampSet && meta)
         {
